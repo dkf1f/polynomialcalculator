@@ -1,0 +1,9 @@
+# my comment
+$a=2x(4x*2);
+$b=4;
+
+# another comment
+print $a;
+print $b;
+$c=$a-$b;
+print $c;

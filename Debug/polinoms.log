@@ -1,0 +1,6 @@
+﻿  example.c
+C:\Users\xiaomi\source\repos\polinoms\polinoms\example.c(6,12): warning C4142: 'yylval': benign redefinition of type
+C:\Users\xiaomi\source\repos\polinoms\polinoms\y.tab.h(78): message : see declaration of 'yylval'
+C:\Users\xiaomi\source\repos\polinoms\polinoms\example.c(11): warning C4716: 'yylex': must return a value
+C:\Users\xiaomi\source\repos\polinoms\polinoms\example.c(25): warning C4716: 'yyerror': must return a value
+  polinoms.vcxproj -> C:\Users\xiaomi\source\repos\polinoms\Debug\polinoms.exe
