@@ -1,6 +1,7 @@
 %{
 #include "header.h"
 extern int line_counter;
+
 %}
 
 %union
@@ -14,19 +15,20 @@ extern int line_counter;
 /* declare tokens */
 
 %token<string> STRING
-%type<poly> polynomplus polynommulti polynompow polynomfirst
+%type<poly> polyplus polymulti polypower polyinit
 %type<mono> monom
 %type<string> variable
 
-%token<num> NUMBER
-%token NUMERR
+%token<num> NUMBER 
 %token LBR RBR POW END PRINT EOL
+%token NUMERR UNSUPPORTED
 %left '+' '-'
 %left '*' '/'
 %right UMINUS
 %right POW
 
 %start start
+
 %%
 
 
@@ -37,7 +39,7 @@ start:
 	;
 	
 programm:
-	variable '=' polynomplus END
+	variable '=' polyplus END
 	{
 		//printf("INIT variable %s\n", $1);
 		init_variable($1, $3);
@@ -50,13 +52,13 @@ programm:
 		printf("Variable %s ", $2);
 		pprint(&tmp);
 	}
-	| PRINT polynomplus END
+	| PRINT polyplus END
 	{
 		printf("Polynomial expression ");
 		pprint(&$2);
 	}
 	/* pseudo rules */
-	| variable '=' polynomplus EOL 
+	| variable '=' polyplus EOL 
 	{	
 		line_counter--;
 		yyerror("Missing ';'");
@@ -66,80 +68,87 @@ programm:
 		line_counter--;
 		yyerror("Missing ';'");
 	}
-	| PRINT polynomplus EOL 
+	| PRINT polyplus EOL 
 	{
 		line_counter--;
 		yyerror("Missing ';'");
 	}
 
 
-polynomplus:
-	polynomplus '+' polynommulti
+polyplus:
+	polyplus '+' polymulti
 	{
 		$$ = add_poly($1, $3);
 	}
-	| polynomplus '-' polynommulti
-	{		
+	| polyplus '-' polymulti
+
+	{	
 		$$ = sub_poly($1, $3);
+
 	}
-	| '-' polynomplus %prec UMINUS
+	| '-' polyplus %prec UMINUS
 	{
 		$$ = unary_poly(&$2);
 	}
-	| polynommulti
+	| polymulti
 	{
 		$$ = $1;
 	}
 	/* pseudo rules */
-	| polynomplus '+' '+'
+	| polyplus '+' '+'
 	{
 		yyerror("Too much '+' operators in expression");
 	}
-	| polynomplus '-' '-'
+	| polyplus '-' '-'
 	{
 		yyerror("Too much '-' operators in expression");
 	}
 
-polynommulti:
+polymulti:
 
-	polynommulti '*' polynompow
+	polymulti '*' polypower
 	{
 		$$ = multiply($1, $3);
 	}
-	| polynommulti polynompow
+	| polymulti polypower
 	{
 		$$ = multiply($1, $2);
 	}
-	| polynompow
+	| polypower
 	{
-		$$ = $1;
+		$$ = $1;	
+
 	}
 	/* pseudo rules */
-	| polynommulti '*' '*'
+	| polymulti '*' '*'
 	{
 		yyerror("Too much '*' operators in expression");
 	}
-	| LBR '*' polynommulti
+	| LBR '*' polymulti
 	{
 		yyerror("Misspelling expression");
 	}
-	| polynommulti '*' RBR
+	| polymulti '*' RBR
 	{
 		yyerror("Misspelling expression");
+	}
+	| polymulti '/' polypower 
+	{
+		yyerror("Don't support division =(");
 	}
 ;
 
-polynompow:
+polypower:
 
-	polynompow POW polynomfirst
+	polypower POW polyinit
 	{
 		polynomial temp = $3;
 		polynomial temp2 = $1;
-		if (temp.begin->element.base == 0)
-		{
-			//return -1;
-		}
+		//if (temp.begin->element.base == 0)
+		//{
+		//}
 		int pow = temp.begin->element.kf;
+		//printf("%d\n", pow);
 		if (pow == 0)
 		{
 			
@@ -166,25 +175,27 @@ polynompow:
 		}
 		else
 		{
-			yylex("Don't support powers under zero");
+			yyerror("Supports ONLY integer powers");
 		}
 	}
-	| polynomfirst
+	| polyinit
 	{
 		$$ = $1;
 	}
 	/* pseudo rules */
-	| polynompow  POW POW 
+	| polypower  POW POW 
 	{
 		yyerror("Too much '^' operators in expression");
 	}
-	| polynompow POW '-'
+	| polypower POW '-'
 	{
-		yyerror("Don't support powers under zero");
-	}
+		yyerror("Don't support powers under zero = (");
+	}	
 	
 	
-polynomfirst:
+;
+	
+polyinit:
 	monom
 	{
 		$$ = init_poly();
@@ -199,7 +210,7 @@ polynomfirst:
 		$$ = search($1); 
 		$$ = multiply($$, poly);
 	}
-	| LBR polynomplus RBR
+	| LBR polyplus RBR
 	{
 		$$ = $2;
 	}
@@ -223,6 +234,10 @@ monom:
 	{
 		yyerror("Print numbers without zero in the beggining");
 	}
+	| UNSUPPORTED
+	{
+		yyerror("Don't support variables in powers");
+	}
 
 ;
 
@@ -245,12 +260,12 @@ int main(int argc, char **argv)
     yyparse();
 
 #elif _WIN32
-    FILE* inputStream = fopen("yyin.txt", "r");
+    FILE* inputStream = fopen(argv[1], "r");
     if (inputStream == NULL)
     {
         printf("Can't found input file yyin.txt\n");
         exit(-1);
-}
+	}
     yyset_in(inputStream);
 	yyparse();
     fclose(inputStream);
@@ -293,13 +308,12 @@ struct node* remove_node(polynomial *p, struct node *n) {
 
 }
 
-polynomial remove_poly(polynomial p)
+polynomial addition_of_similar_terms(polynomial p)
 {
 	polynomial result = init_poly();
 	monomial tmp_monom;
 	struct node* tmp1 = p.begin;
 	struct node* tmp2;
-
 	while (tmp1 != NULL)
 	{
 		tmp_monom = tmp1->element;
@@ -319,7 +333,7 @@ polynomial remove_poly(polynomial p)
 		tmp1 = remove_node(&p, tmp1);
 		result = add_monom(result, tmp_monom);
 	}
-
+	
 	return result;
 }
 
@@ -346,7 +360,7 @@ polynomial add_poly(polynomial p1, polynomial p2) {
 		res = add_monom(res, tmp->element);
 	}
 	// !!!!!
-	return res = remove_poly(res);
+	return res = addition_of_similar_terms(res);
 }
 
 
@@ -428,7 +442,7 @@ polynomial multiply(polynomial p1, polynomial p2) {
 		}
 	}
 
-	res = remove_poly(res);
+	res = addition_of_similar_terms(res);
 	return res;
 
 }
@@ -550,7 +564,7 @@ void init_variable(char* name, polynomial polynom) {
 	else {
 		if(!check_in_global_list(name)) global_var_list = (struct var*)realloc(global_var_list, sizeof(struct var)*(var_counter+1));
 		else {
-			printf("WARNING in line %d: Variable '$%s' reinitialization\n", line_counter, name);
+			printf("WARNING in line %d: Variable '$%s' reinitialization\n", line_counter+1, name);
 			replace(name, polynom);
 			return;
 		}
@@ -561,38 +575,95 @@ void init_variable(char* name, polynomial polynom) {
 }
 	
 
+
 void pprint(polynomial* p) {
 
-	struct node *tmp = p->begin;
+	struct node *begin = p->begin;
 	printf("= ");
-	while (tmp->element.kf == 0 && tmp->next != NULL)
+	
+	while (begin->element.kf == 0 && begin->next != NULL) begin = begin->next;
+	int itemNum = 0;
+	//printf("my = %d\n", p->counter);
+	for (struct node *tmp = begin; tmp != NULL; tmp = tmp->next) itemNum++;
+	int *itemWasPrinted = (int*)calloc(sizeof(int), itemNum);
+
+	char varName[2] = "0";
+	for (struct node *tmp = begin; tmp != NULL; tmp = tmp->next)
 	{
-		tmp = tmp->next;
-		continue;
+		if (strncmp(tmp->element.base, "0", 2) != 0) strncpy(varName, tmp->element.base, 2);	
+		
+	}
+	int firstWasPrinted = 0;
+	//Вывести все одночлены с этой переменной
+	for (int i = 0; i < itemNum; i++)
+	{
+		//Найти самую старшую невыведенную степень
+		int maxPower = 0;
+		int currentItemIndex = 0;
+		int itemIndex = 0;
+		struct node *result = begin;
+		for (struct node *tmp = begin; tmp != NULL; tmp = tmp->next)
+		{
+			if (strncmp(tmp->element.base, varName, 2) == 0 && //Если совпадает имя переменной
+				itemWasPrinted[currentItemIndex] == 0 &&					  //Эта переменная не была выведена
+				tmp->element.power > maxPower)					  //Cтепень выше других
+			{
+				result = tmp;
+				maxPower = tmp->element.power;
+				itemIndex = currentItemIndex;
+			}
+
+			currentItemIndex++;
+		}
+
+		if (maxPower != 0)//Если был найден хоть один подходящий элемент, то
+		{
+			//Вывести найденный элемент
+			if (firstWasPrinted && result->element.kf > 0)//Если уже были выведены значения и коэффициент положительный
+			{
+				printf("+");
+			}
+			if (result->element.kf != 0) {
+				firstWasPrinted = 1;
+				mprint(&result->element);
+				//printf("kdkdk\n");
+				itemWasPrinted[itemIndex] = 1;
+			}
+			
+		}
+		else
+		{
+			break;//Если нового невыведенного элемента не было найдено, то можно перейти к следующей переменной
+		}
+	}
+	
+	for (struct node *tmp = begin; tmp != NULL; tmp = tmp->next)
+	{
+		if (strncmp(tmp->element.base, "0", 2) == 0 && tmp->element.kf != 0)
+		{
+			if (firstWasPrinted && tmp->element.kf > 0) //Если уже были выведены значения и коэффициент положительный
+			{
+				printf("+");
+			}
+
+			firstWasPrinted = 1;
+			mprint(&tmp->element);
+			//printf("qwqwqqw\n");
+			break;
+		}
 	}
 
-	mprint(&(tmp->element));
-	tmp = tmp->next;
-	while (tmp != NULL)
-	{
-		if (tmp->element.kf == 0)
-		{
-			tmp = tmp->next;
-			continue;
-		}
-		
-		//!!!!!!!!!!
-		if (tmp->element.kf > 0) printf("+");
-		mprint(&(tmp->element));
-		tmp = tmp->next;
-	}
-	printf("\n");
+	//Вывести 0, если совсем ничего не было выведено
+	if (!firstWasPrinted) printf("0");
+	
+	printf(".\n");
+	
 
 }
 
 int yyerror(char *msg)
 {
-    fprintf(stderr, "ERROR IN LINE %d: %s\n", line_counter+1,  msg);
+    fprintf(stderr, "ERROR IN LINE %d : %s\n", line_counter+1, msg);
 	exit(-1);
 	
 }

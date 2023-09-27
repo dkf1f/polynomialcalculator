@@ -38,6 +38,7 @@ struct var
 polynomial init_poly();
 polynomial add_monom(polynomial, monomial);
 polynomial unary_poly(polynomial*);
+polynomial sort(polynomial*);
 polynomial remove_poly(polynomial);
 polynomial sub_poly(polynomial, polynomial);
 polynomial add_poly(polynomial, polynomial);
